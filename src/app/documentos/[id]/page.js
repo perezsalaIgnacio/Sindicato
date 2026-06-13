@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Navbar from '@/components/Navbar';
 import PdfViewer from '@/components/PdfViewer';
-import { mockClient, isMocked, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { ArrowLeft, Calendar, FileText, Clock, Plus, Layers, Globe, ShieldAlert, Award } from 'lucide-react';
 import Link from 'next/navigation';
 
@@ -45,39 +45,26 @@ export default function DocumentoViewerPage() {
   const handleUpdateVersion = async (e) => {
     e.preventDefault();
     try {
-      if (isMocked) {
-        await mockClient.updateVersion(versionEditForm.id, {
-          document_id: docId,
+      if (versionEditForm.is_current) {
+        await supabase
+          .from('document_versions')
+          .update({ is_current: false })
+          .eq('document_id', docId);
+      }
+      
+      const { error } = await supabase
+        .from('document_versions')
+        .update({
           version_name: versionEditForm.version_name,
           file_path: versionEditForm.file_path,
           published_at: versionEditForm.published_at,
           effective_from: versionEditForm.effective_from,
           status: versionEditForm.status,
           is_current: versionEditForm.is_current
-        });
-      } else {
-        // En Supabase, actualizamos
-        if (versionEditForm.is_current) {
-          await supabase
-            .from('document_versions')
-            .update({ is_current: false })
-            .eq('document_id', docId);
-        }
-        
-        const { error } = await supabase
-          .from('document_versions')
-          .update({
-            version_name: versionEditForm.version_name,
-            file_path: versionEditForm.file_path,
-            published_at: versionEditForm.published_at,
-            effective_from: versionEditForm.effective_from,
-            status: versionEditForm.status,
-            is_current: versionEditForm.is_current
-          })
-          .eq('id', versionEditForm.id);
+        })
+        .eq('id', versionEditForm.id);
 
-        if (error) throw error;
-      }
+      if (error) throw error;
       
       setShowEditVersionModal(false);
       window.location.reload();
@@ -96,40 +83,29 @@ export default function DocumentoViewerPage() {
     async function loadDocument() {
       setLoading(true);
       try {
-        let docData = null;
-        
-        if (isMocked) {
-          docData = await mockClient.getDocumentById(docId);
-        } else {
-          // Obtener de Supabase con relaciones
-          const { data: doc, error } = await supabase
-            .from('documents')
-            .select(`
-              *,
-              sectors (*),
-              geographic_scopes (*),
-              document_versions (*)
-            `)
-            .eq('id', docId)
-            .single();
+        const { data: doc, error } = await supabase
+          .from('documents')
+          .select(`
+            *,
+            sectors (*),
+            geographic_scopes (*),
+            document_versions (*)
+          `)
+          .eq('id', docId)
+          .single();
 
-          if (error) throw error;
+        if (error) throw error;
 
-          if (doc) {
-            // Ordenar versiones cronológicamente (más recientes primero)
-            const versionsSorted = (doc.document_versions || []).sort(
-              (a, b) => new Date(b.effective_from) - new Date(a.effective_from)
-            );
-            docData = {
-              ...doc,
-              sectors: doc.sectors,
-              geographic_scopes: doc.geographic_scopes,
-              versions: versionsSorted
-            };
-          }
-        }
-
-        if (docData) {
+        if (doc) {
+          const versionsSorted = (doc.document_versions || []).sort(
+            (a, b) => new Date(b.effective_from) - new Date(a.effective_from)
+          );
+          const docData = {
+            ...doc,
+            sectors: doc.sectors,
+            geographic_scopes: doc.geographic_scopes,
+            versions: versionsSorted
+          };
           setDocument(docData);
           // Por defecto mostrar la versión marcada como vigente, si no hay ninguna, la más reciente
           const current = docData.versions?.find(v => v.is_current) || docData.versions?.[0];
@@ -146,6 +122,7 @@ export default function DocumentoViewerPage() {
       loadDocument();
     }
   }, [docId]);
+
 
   const formatDate = (dateString) => {
     if (!dateString) return '-';

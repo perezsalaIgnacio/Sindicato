@@ -3,7 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { Heart, FileText, Globe, Layers, Calendar, ChevronRight } from 'lucide-react';
-import { mockClient, isMocked } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
+
 
 export default function DocumentCard({ doc, onFavoriteToggle }) {
   const [isFav, setIsFav] = useState(false);

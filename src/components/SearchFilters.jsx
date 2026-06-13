@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { Search, Globe, Layers, X } from 'lucide-react';
-import { mockClient, isMocked, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 export default function SearchFilters({ onFilterChange }) {
   const [sectors, setSectors] = useState([]);
@@ -15,21 +15,10 @@ export default function SearchFilters({ onFilterChange }) {
   useEffect(() => {
     async function loadFilters() {
       try {
-        let sectorsData = [];
-        let scopesData = [];
-        
-        if (isMocked) {
-          sectorsData = await mockClient.getSectors();
-          scopesData = await mockClient.getScopes();
-        } else {
-          const { data: sData } = await supabase.from('sectors').select('*');
-          const { data: scData } = await supabase.from('geographic_scopes').select('*');
-          sectorsData = sData || [];
-          scopesData = scData || [];
-        }
-        
-        setSectors(sectorsData);
-        setScopes(scopesData);
+        const { data: sData } = await supabase.from('sectors').select('*').order('name');
+        const { data: scData } = await supabase.from('geographic_scopes').select('*').order('type');
+        setSectors(sData || []);
+        setScopes(scData || []);
       } catch (err) {
         console.error('Error al cargar filtros:', err);
       }

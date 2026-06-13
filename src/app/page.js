@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Navbar from '@/components/Navbar';
 import SearchFilters from '@/components/SearchFilters';
 import DocumentCard from '@/components/DocumentCard';
-import { mockClient, isMocked, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { BookOpen, Star, History, Sparkles, ArrowUpRight, Loader2 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -23,11 +23,7 @@ export default function Dashboard() {
     async function loadInitialData() {
       setLoading(true);
       try {
-        let docs = [];
-        if (isMocked) {
-          docs = await mockClient.getDocuments();
-        } else {
-          // Cargar desde Supabase con relaciones
+        // Cargar desde Supabase con relaciones
           const { data, error } = await supabase
             .from('documents')
             .select(`
@@ -41,7 +37,7 @@ export default function Dashboard() {
           if (error) throw error;
           
           // Formatear para que coincida con la estructura esperada por DocumentCard
-          docs = (data || []).map(d => {
+          const docs = (data || []).map(d => {
             const currentVersion = d.document_versions?.find(v => v.is_current) 
               || d.document_versions?.[0];
             return {
@@ -51,7 +47,7 @@ export default function Dashboard() {
               current_version: currentVersion
             };
           });
-        }
+
 
         setDocuments(docs);
         setFilteredDocs(docs);

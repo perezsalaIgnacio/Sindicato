@@ -3,7 +3,7 @@
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Navbar from '@/components/Navbar';
-import { mockClient, isMocked, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { Upload, ShieldAlert, CheckCircle, AlertCircle, ArrowLeft, FileText, Plus, Layers, Globe } from 'lucide-react';
 
 // Componente secundario para envolver el uso de hooks de búsqueda
@@ -40,50 +40,91 @@ function AdminFormContent() {
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState({ type: '', text: '' });
 
+  // Dialog controls for adding new sector/scope
+  const [showSectorDialog, setShowSectorDialog] = useState(false);
+  const [newSectorName, setNewSectorName] = useState('');
+  const [newSectorSlug, setNewSectorSlug] = useState('');
+
+  const [showScopeDialog, setShowScopeDialog] = useState(false);
+  const [newScopeType, setNewScopeType] = useState('nacional');
+  const [newRegionName, setNewRegionName] = useState('');
+  const [newProvinceName, setNewProvinceName] = useState('');
+
+  // Handlers to create sector and scope via API
+  const createSector = async () => {
+    if (!newSectorName || !newSectorSlug) {
+      setMessage({ type: 'error', text: 'Nombre y slug del sector son obligatorios.' });
+      return;
+    }
+    const res = await fetch('/api/sectors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: newSectorName, slug: newSectorSlug }),
+    });
+    if (res.ok) {
+      setMessage({ type: 'success', text: 'Sector creado correctamente.' });
+      setShowSectorDialog(false);
+      // Refresh sectors
+      const s = await fetch('/api/sectors').then(r => r.json());
+      setSectors(s);
+    } else {
+      const err = await res.json();
+      setMessage({ type: 'error', text: err.error || 'Error al crear sector.' });
+    }
+  };
+
+  const createScope = async () => {
+    if (!newScopeType) {
+      setMessage({ type: 'error', text: 'Tipo de ámbito es obligatorio.' });
+      return;
+    }
+    const payload = { type: newScopeType };
+    if (newScopeType !== 'nacional') {
+      payload.region_name = newRegionName || null;
+      payload.province_name = newScopeType === 'provincial' ? newProvinceName : null;
+    }
+    const res = await fetch('/api/scopes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok) {
+      setMessage({ type: 'success', text: 'Ámbito creado correctamente.' });
+      setShowScopeDialog(false);
+      const sc = await fetch('/api/scopes').then(r => r.json());
+      setScopes(sc);
+    } else {
+      const err = await res.json();
+      setMessage({ type: 'error', text: err.error || 'Error al crear ámbito.' });
+    }
+  };
+
+
   useEffect(() => {
     // Cargar listas de selección y datos si estamos en modo edición
     async function loadFormMetadata() {
       try {
-        let sectorsData = [];
-        let scopesData = [];
-        let docsData = [];
+        const { data: sData } = await supabase.from('sectors').select('*').order('name');
+        const { data: scData } = await supabase.from('geographic_scopes').select('*').order('type');
+        const { data: dData } = await supabase.from('documents').select('*').order('title');
 
-        if (isMocked) {
-          sectorsData = await mockClient.getSectors();
-          scopesData = await mockClient.getScopes();
-          docsData = await mockClient.getDocuments();
-        } else {
-          const { data: sData } = await supabase.from('sectors').select('*');
-          const { data: scData } = await supabase.from('geographic_scopes').select('*');
-          const { data: dData } = await supabase.from('documents').select('*');
-          sectorsData = sData || [];
-          scopesData = scData || [];
-          docsData = dData || [];
-        }
-
-        setSectors(sectorsData);
-        setScopes(scopesData);
-        setDocuments(docsData);
+        setSectors(sData || []);
+        setScopes(scData || []);
+        setDocuments(dData || []);
 
         if (editDocId) {
-          let docToEdit = null;
-          if (isMocked) {
-            docToEdit = await mockClient.getDocumentById(editDocId);
-          } else {
-            const { data, error } = await supabase
-              .from('documents')
-              .select('*')
-              .eq('id', editDocId)
-              .single();
-            if (!error) docToEdit = data;
-          }
+          const { data, error } = await supabase
+            .from('documents')
+            .select('*')
+            .eq('id', editDocId)
+            .single();
 
-          if (docToEdit) {
-            setDocTitle(docToEdit.title);
-            setDocDescription(docToEdit.description || '');
-            setDocSectorId(docToEdit.sector_id);
-            setDocScopeId(docToEdit.scope_id);
-            setIsNewDocument(true); // Mostrar campos de edición de texto directamente
+          if (!error && data) {
+            setDocTitle(data.title);
+            setDocDescription(data.description || '');
+            setDocSectorId(data.sector_id);
+            setDocScopeId(data.scope_id);
+            setIsNewDocument(true);
           }
         } else if (preselectedDocId) {
           setSelectedDocId(preselectedDocId);
@@ -116,55 +157,33 @@ function AdminFormContent() {
           throw new Error('Por favor, rellene todos los campos obligatorios del convenio.');
         }
 
-        if (isMocked) {
-          await mockClient.updateDocument(editDocId, {
+        const { error: docErr } = await supabase
+          .from('documents')
+          .update({
             title: docTitle,
             description: docDescription,
-            sector_id: docSectorId,
-            scope_id: docScopeId
-          });
-        } else {
-          const { error: docErr } = await supabase
-            .from('documents')
-            .update({
-              title: docTitle,
-              description: docDescription,
-              sector_id: Number(docSectorId),
-              scope_id: Number(docScopeId)
-            })
-            .eq('id', editDocId);
+            sector_id: Number(docSectorId),
+            scope_id: Number(docScopeId)
+          })
+          .eq('id', editDocId);
 
-          if (docErr) throw docErr;
-        }
+        if (docErr) throw docErr;
 
         // Si se seleccionó subir un archivo PDF o se enlazó una URL, crear una versión
         if (pdfFile || externalPdfUrl || versionName) {
           let filePath = '';
           if (pdfSourceType === 'url') {
             filePath = externalPdfUrl;
-            if (!filePath) {
-              throw new Error('Debe proporcionar la URL externa del PDF.');
-            }
-          } else {
-            if (!isMocked && pdfFile) {
-              const fileExt = pdfFile.name.split('.').pop();
-              const fileName = `${editDocId}_${Date.now()}.${fileExt}`;
-              const { data: uploadData, error: uploadErr } = await supabase.storage
-                .from('labor-documents')
-                .upload(fileName, pdfFile);
-
-              if (uploadErr) throw uploadErr;
-              
-              const { data: urlData } = supabase.storage
-                .from('labor-documents')
-                .getPublicUrl(fileName);
-              
-              filePath = urlData.publicUrl;
-            } else {
-              filePath = pdfFile 
-                ? URL.createObjectURL(pdfFile) 
-                : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-            }
+            if (!filePath) throw new Error('Debe proporcionar la URL externa del PDF.');
+          } else if (pdfFile) {
+            const fileExt = pdfFile.name.split('.').pop();
+            const fileName = `${editDocId}_${Date.now()}.${fileExt}`;
+            const { data: uploadData, error: uploadErr } = await supabase.storage
+              .from('labor-documents')
+              .upload(fileName, pdfFile);
+            if (uploadErr) throw uploadErr;
+            const { data: urlData } = supabase.storage.from('labor-documents').getPublicUrl(fileName);
+            filePath = urlData.publicUrl;
           }
 
           const versionData = {
@@ -178,28 +197,17 @@ function AdminFormContent() {
             file_size: pdfFile ? pdfFile.size : 1500000
           };
 
-          if (isMocked) {
-            await mockClient.createVersion(versionData);
-          } else {
-            if (isCurrent) {
-              await supabase
-                .from('document_versions')
-                .update({ is_current: false })
-                .eq('document_id', editDocId);
-            }
-
-            const { error: verErr } = await supabase
-              .from('document_versions')
-              .insert(versionData);
-
-            if (verErr) throw verErr;
+          if (isCurrent) {
+            await supabase.from('document_versions').update({ is_current: false }).eq('document_id', editDocId);
           }
+          const { error: verErr } = await supabase.from('document_versions').insert(versionData);
+          if (verErr) throw verErr;
         }
 
         setMessage({ type: 'success', text: 'Convenio actualizado correctamente. Redirigiendo...' });
       } else {
         // 2. MODO CARGA NUEVO / NUEVA VERSIÓN
-        if (pdfSourceType === 'file' && !pdfFile && !isMocked) {
+        if (pdfSourceType === 'file' && !pdfFile) {
           throw new Error('Es obligatorio subir un archivo PDF del documento o seleccionar el método de URL externa.');
         }
         if (pdfSourceType === 'url' && !externalPdfUrl) {
@@ -210,60 +218,35 @@ function AdminFormContent() {
           if (!docTitle || !docSectorId || !docScopeId) {
             throw new Error('Por favor, rellene todos los campos obligatorios del nuevo documento.');
           }
-
-          if (isMocked) {
-            const newDoc = await mockClient.createDocument({
+          const { data: newDoc, error: docErr } = await supabase
+            .from('documents')
+            .insert({
               title: docTitle,
               description: docDescription,
-              sector_id: docSectorId,
-              scope_id: docScopeId
-            });
-            targetDocId = newDoc.id;
-          } else {
-            const { data: newDoc, error: docErr } = await supabase
-              .from('documents')
-              .insert({
-                title: docTitle,
-                description: docDescription,
-                sector_id: Number(docSectorId),
-                scope_id: Number(docScopeId),
-                is_active: true
-              })
-              .select()
-              .single();
-
-            if (docErr) throw docErr;
-            targetDocId = newDoc.id;
-          }
+              sector_id: Number(docSectorId),
+              scope_id: Number(docScopeId),
+              is_active: true
+            })
+            .select()
+            .single();
+          if (docErr) throw docErr;
+          targetDocId = newDoc.id;
         } else {
-          if (!targetDocId) {
-            throw new Error('Seleccione un documento existente de la lista.');
-          }
+          if (!targetDocId) throw new Error('Seleccione un documento existente de la lista.');
         }
 
         let filePath = '';
         if (pdfSourceType === 'url') {
           filePath = externalPdfUrl;
-        } else {
-          if (!isMocked && pdfFile) {
-            const fileExt = pdfFile.name.split('.').pop();
-            const fileName = `${targetDocId}_${Date.now()}.${fileExt}`;
-            const { data: uploadData, error: uploadErr } = await supabase.storage
-              .from('labor-documents')
-              .upload(fileName, pdfFile);
-
-            if (uploadErr) throw uploadErr;
-            
-            const { data: urlData } = supabase.storage
-              .from('labor-documents')
-              .getPublicUrl(fileName);
-            
-            filePath = urlData.publicUrl;
-          } else {
-            filePath = pdfFile 
-              ? URL.createObjectURL(pdfFile) 
-              : 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf';
-          }
+        } else if (pdfFile) {
+          const fileExt = pdfFile.name.split('.').pop();
+          const fileName = `${targetDocId}_${Date.now()}.${fileExt}`;
+          const { data: uploadData, error: uploadErr } = await supabase.storage
+            .from('labor-documents')
+            .upload(fileName, pdfFile);
+          if (uploadErr) throw uploadErr;
+          const { data: urlData } = supabase.storage.from('labor-documents').getPublicUrl(fileName);
+          filePath = urlData.publicUrl;
         }
 
         const versionData = {
@@ -277,22 +260,11 @@ function AdminFormContent() {
           file_size: pdfFile ? pdfFile.size : 1500000
         };
 
-        if (isMocked) {
-          await mockClient.createVersion(versionData);
-        } else {
-          if (isCurrent) {
-            await supabase
-              .from('document_versions')
-              .update({ is_current: false })
-              .eq('document_id', targetDocId);
-          }
-
-          const { error: verErr } = await supabase
-            .from('document_versions')
-            .insert(versionData);
-
-          if (verErr) throw verErr;
+        if (isCurrent) {
+          await supabase.from('document_versions').update({ is_current: false }).eq('document_id', targetDocId);
         }
+        const { error: verErr } = await supabase.from('document_versions').insert(versionData);
+        if (verErr) throw verErr;
 
         setMessage({ type: 'success', text: 'Documento y versión subidos correctamente. Redirigiendo...' });
       }
@@ -458,7 +430,87 @@ function AdminFormContent() {
                       </option>
                     ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => setShowSectorDialog(true)}
+                    className="ml-2 px-3 py-1 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700"
+                  >
+                    + Nuevo Sector
+                  </button>
+  {showSectorDialog && (
+    <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 backdrop-blur-sm">
+      <div className="bg-white dark:bg-zinc-800 bg-opacity-80 backdrop-blur-md rounded-xl p-6 w-96 transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-lg font-bold">Agregar Nuevo Sector</h2>
+          <button type="button"
+            onClick={() => { setShowSectorDialog(false); setNewSectorName(''); setNewSectorSlug(''); }}
+            className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-white">
+            ✕
+          </button>
+        </div>
+        <input
+          type="text"
+          placeholder="Nombre"
+          value={newSectorName}
+          onChange={(e) => setNewSectorName(e.target.value)}
+          className="w-full mb-2 p-2 border rounded bg-white dark:bg-zinc-700"
+        />
+        <input
+          type="text"
+          placeholder="Slug"
+          value={newSectorSlug}
+          onChange={(e) => setNewSectorSlug(e.target.value)}
+          className="w-full mb-4 p-2 border rounded bg-white dark:bg-zinc-700"
+        />
+        <div className="flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={createSector}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition">
+            Crear
+          </button>
+          <button
+            type="button"
+            onClick={() => { setShowSectorDialog(false); setNewSectorName(''); setNewSectorSlug(''); }}
+            className="px-4 py-2 bg-gray-300 dark:bg-zinc-600 text-black dark:text-white rounded hover:bg-gray-400 transition">
+            Cancelar
+          </button>
+        </div>
+      </div>
+    </div>
+  )}
                 </div>
+
+{showScopeDialog && (
+  <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50 backdrop-blur-sm">
+    <div className="bg-white dark:bg-zinc-800 bg-opacity-80 backdrop-blur-md rounded-xl p-6 w-96 transition-all duration-300 ease-in-out transform hover:scale-105 shadow-lg">
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold">Agregar Nuevo Ámbito</h2>
+        <button type="button"
+          onClick={() => { setShowScopeDialog(false); setNewScopeType('nacional'); setNewRegionName(''); setNewProvinceName(''); }}
+          className="text-zinc-500 hover:text-zinc-700 dark:text-zinc-400 dark:hover:text-white"
+        >✕</button>
+      </div>
+      <select value={newScopeType} onChange={(e)=> setNewScopeType(e.target.value)} className="w-full mb-2 p-2 border rounded bg-white dark:bg-zinc-700">
+        <option value="nacional">Nacional</option>
+        <option value="autonomico">Autónomico</option>
+        <option value="provincial">Provincial</option>
+      </select>
+      {newScopeType !== 'nacional' && (
+        <>
+          <input type="text" placeholder="Nombre Región" value={newRegionName} onChange={(e)=> setNewRegionName(e.target.value)} className="w-full mb-2 p-2 border rounded bg-white dark:bg-zinc-700" />
+          {newScopeType === 'provincial' && (
+            <input type="text" placeholder="Nombre Provincia" value={newProvinceName} onChange={(e)=> setNewProvinceName(e.target.value)} className="w-full mb-4 p-2 border rounded bg-white dark:bg-zinc-700" />
+          )}
+        </>
+      )}
+      <div className="flex justify-end gap-2 mt-4">
+        <button type="button" onClick={createScope} className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition">Crear</button>
+        <button type="button" onClick={() => { setShowScopeDialog(false); setNewScopeType('nacional'); setNewRegionName(''); setNewProvinceName(''); }} className="px-4 py-2 bg-gray-300 dark:bg-zinc-600 text-black dark:text-white rounded hover:bg-gray-400 transition">Cancelar</button>
+      </div>
+    </div>
+  </div>
+)}
 
                 <div>
                   <label className="block text-sm font-bold text-zinc-700 dark:text-zinc-300 mb-2">
@@ -482,6 +534,13 @@ function AdminFormContent() {
                       );
                     })}
                   </select>
+                    <button
+                      type="button"
+                      onClick={() => setShowScopeDialog(true)}
+                      className="ml-2 px-3 py-1 text-sm font-medium text-white bg-red-600 rounded hover:bg-red-700"
+                    >
+                      + Nuevo Ámbito
+                    </button>
                 </div>
               </div>
             </div>
