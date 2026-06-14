@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { FileText, ShieldAlert, User, LogOut, Layers, Heart } from 'lucide-react';
-import { isMocked } from '@/lib/supabase';
+import { isMocked, supabase } from '@/lib/supabase';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -13,7 +13,6 @@ export default function Navbar() {
   const [showProfileMenu, setShowProfileMenu] = useState(false);
 
   useEffect(() => {
-    // Si estamos en modo de prueba, cargamos el usuario de simulación en localStorage
     if (isMocked) {
       const savedUser = localStorage.getItem('simulated_user');
       if (savedUser) {
@@ -27,6 +26,55 @@ export default function Navbar() {
           setCurrentUser(defaultUser);
         }
       }
+    } else {
+      // Sincronizar el usuario autenticado real
+      const syncUser = async (session) => {
+        if (session?.user) {
+          try {
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('*')
+              .eq('id', session.user.id)
+              .single();
+            
+            if (error) throw error;
+            
+            const userObj = {
+              email: session.user.email,
+              role: profile?.role || 'usuario',
+              full_name: profile?.full_name || session.user.email.split('@')[0],
+            };
+            setCurrentUser(userObj);
+            document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=604800; SameSite=Lax; Secure`;
+          } catch (e) {
+            console.error('Error fetching user profile:', e);
+            const userObj = {
+              email: session.user.email,
+              role: 'usuario',
+              full_name: session.user.email.split('@')[0],
+            };
+            setCurrentUser(userObj);
+            document.cookie = `sb-access-token=${session.access_token}; path=/; max-age=604800; SameSite=Lax; Secure`;
+          }
+        } else {
+          setCurrentUser(null);
+          document.cookie = 'sb-access-token=; path=/; max-age=0; SameSite=Lax; Secure';
+        }
+      };
+
+      // Obtener sesión activa inicial
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        syncUser(session);
+      });
+
+      // Escuchar cambios de autenticación
+      const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+        syncUser(session);
+      });
+
+      return () => {
+        subscription.unsubscribe();
+      };
     }
   }, []);
 

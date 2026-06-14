@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Mail, Lock, FileText, ArrowLeft, AlertCircle } from 'lucide-react';
 import { isMocked, supabase } from '@/lib/supabase';
 
@@ -121,9 +122,17 @@ export default function LoginPage() {
           </div>
 
           <div>
-            <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 mb-1.5 uppercase tracking-wider">
-              Contraseña
-            </label>
+            <div className="flex justify-between items-center mb-1.5">
+              <label className="block text-xs font-bold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
+                Contraseña
+              </label>
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors"
+              >
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
             <div className="relative">
               <Lock className="absolute left-3 top-3.5 h-4.5 w-4.5 text-zinc-400" />
               <input
