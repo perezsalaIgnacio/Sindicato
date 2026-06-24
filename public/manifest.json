@@ -1,0 +1,17 @@
+{
+  "name": "SindiDoc - Gestor Documental Sindical",
+  "short_name": "SindiDoc",
+  "description": "Consulta y control de versiones de Convenios Colectivos y el Estatuto de los Trabajadores sin conexión.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#09090b",
+  "theme_color": "#dc2626",
+  "icons": [
+    {
+      "src": "/file.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

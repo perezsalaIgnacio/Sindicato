@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import Navbar from '@/components/Navbar';
 import { supabase } from '@/lib/supabase';
-import { Upload, ShieldAlert, CheckCircle, AlertCircle, ArrowLeft, FileText, Plus, Layers, Globe } from 'lucide-react';
+import { Upload, ShieldAlert, CheckCircle, AlertCircle, ArrowLeft, FileText, Plus, Layers, Globe, Pencil, Trash2 } from 'lucide-react';
+import Link from 'next/link';
 
 // Componente secundario para envolver el uso de hooks de búsqueda
 function AdminFormContent() {
@@ -106,7 +106,15 @@ function AdminFormContent() {
       try {
         const { data: sData } = await supabase.from('sectors').select('*').order('name');
         const { data: scData } = await supabase.from('geographic_scopes').select('*').order('type');
-        const { data: dData } = await supabase.from('documents').select('*').order('title');
+        const { data: dData } = await supabase
+          .from('documents')
+          .select(`
+            *,
+            sectors (*),
+            geographic_scopes (*),
+            document_versions (*)
+          `)
+          .order('title');
 
         setSectors(sData || []);
         setScopes(scData || []);
@@ -131,11 +139,40 @@ function AdminFormContent() {
           setIsNewDocument(false);
         }
       } catch (err) {
-        console.error('Error al cargar datos del formulario:', err);
+        if (!err?.message?.includes('fetch')) {
+          console.warn('Error al cargar datos del formulario:', err);
+        }
       }
     }
     loadFormMetadata();
   }, [preselectedDocId, editDocId]);
+
+  const handleDeleteDocument = async (id) => {
+    if (!confirm('¿Está seguro de que desea eliminar este convenio y todas sus versiones? Esta acción no se puede deshacer.')) return;
+    
+    const { error: verErr } = await supabase.from('document_versions').delete().eq('document_id', id);
+    if (verErr) {
+      setMessage({ type: 'error', text: 'Error al eliminar las versiones del convenio: ' + verErr.message });
+      return;
+    }
+    
+    const { error: docErr } = await supabase.from('documents').delete().eq('id', id);
+    if (docErr) {
+      setMessage({ type: 'error', text: 'Error al eliminar el convenio: ' + docErr.message });
+    } else {
+      setMessage({ type: 'success', text: 'Convenio eliminado correctamente.' });
+      const { data } = await supabase
+        .from('documents')
+        .select(`
+          *,
+          sectors (*),
+          geographic_scopes (*),
+          document_versions (*)
+        `)
+        .order('title');
+      setDocuments(data || []);
+    }
+  };
 
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -279,6 +316,158 @@ function AdminFormContent() {
       setUploading(false);
     }
   };
+
+  if (!editDocId && !preselectedDocId) {
+    return (
+      <div className="p-6 max-w-6xl mx-auto space-y-6">
+        {/* Título y Acciones */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-zinc-900 dark:text-white">Panel de Control de Convenios</h1>
+            <p className="text-sm text-zinc-500 mt-1">Gestiona y edita los convenios colectivos registrados en el repositorio.</p>
+          </div>
+          <button
+            onClick={() => router.push('/admin/nuevo-convenio')}
+            className="flex items-center gap-2 px-4 py-2.5 bg-red-600 text-white text-xs font-bold rounded-xl hover:bg-red-750 transition-colors shadow-sm"
+          >
+            <Plus className="h-4 w-4" /> Nuevo Convenio
+          </button>
+        </div>
+
+        {/* Alertas */}
+        {message.text && (
+          <div className={`p-4 rounded-xl flex items-start gap-3 ${
+            message.type === 'success' 
+              ? 'bg-emerald-50 text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-400 border border-emerald-500/20' 
+              : 'bg-rose-50 text-rose-800 dark:bg-rose-950/20 dark:text-rose-400 border border-rose-500/20'
+          }`}>
+            {message.type === 'success' ? (
+              <CheckCircle className="h-5 w-5 flex-shrink-0 text-emerald-600" />
+            ) : (
+              <AlertCircle className="h-5 w-5 flex-shrink-0 text-rose-600" />
+            )}
+            <span className="text-sm font-medium">{message.text}</span>
+            <button className="ml-auto text-xs underline font-bold" onClick={() => setMessage({ text: '', type: '' })}>Cerrar</button>
+          </div>
+        )}
+
+        {/* Stats Rápidas */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+            <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Total Convenios</h3>
+            <p className="text-3xl font-extrabold text-zinc-950 dark:text-white mt-2">{documents.length}</p>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+            <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Vigentes</h3>
+            <p className="text-3xl font-extrabold text-emerald-600 dark:text-emerald-400 mt-2">
+              {documents.filter(d => d.document_versions?.find(v => v.is_current)?.status === 'vigente').length}
+            </p>
+          </div>
+          <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm">
+            <h3 className="text-xs font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider">Sectores Activos</h3>
+            <p className="text-3xl font-extrabold text-red-600 dark:text-red-400 mt-2">{sectors.length}</p>
+          </div>
+        </div>
+
+        {/* Tabla de Documentos */}
+        <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-sm bg-white dark:bg-zinc-900/50">
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+              <thead className="bg-zinc-50 dark:bg-zinc-900">
+                <tr>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-zinc-500 uppercase tracking-wider">Convenio / Título</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-zinc-500 uppercase tracking-wider">Sector</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-zinc-500 uppercase tracking-wider">Ámbito</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-zinc-500 uppercase tracking-wider">Versión Activa</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-bold text-zinc-500 uppercase tracking-wider">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800 bg-white dark:bg-zinc-900/30">
+                {documents.length === 0 ? (
+                  <tr>
+                    <td colSpan="5" className="px-6 py-10 text-center text-sm text-zinc-500">
+                      No hay convenios cargados en el repositorio.
+                    </td>
+                  </tr>
+                ) : (
+                  documents.map((doc) => {
+                    const currentVersion = doc.document_versions?.find(v => v.is_current) || doc.document_versions?.[0];
+                    const scopeLabel = doc.geographic_scopes?.type === 'nacional'
+                      ? 'Nacional'
+                      : doc.geographic_scopes?.province_name || doc.geographic_scopes?.region_name || 'Nacional';
+                    
+                    return (
+                      <tr key={doc.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-850/40 transition-colors">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <FileText className="h-4 w-4 text-zinc-400 flex-shrink-0" />
+                            <Link href={`/documentos/${doc.id}`} className="text-sm font-bold text-zinc-900 dark:text-white hover:text-red-600 hover:underline line-clamp-2">
+                              {doc.title}
+                            </Link>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
+                          {doc.sectors?.name || 'General'}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-zinc-600 dark:text-zinc-400">
+                          {scopeLabel}
+                        </td>
+                        <td className="px-6 py-4">
+                          {currentVersion ? (
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-zinc-850 dark:text-zinc-200 truncate max-w-[150px]">
+                                {currentVersion.version_name}
+                              </span>
+                              <span className={`inline-flex items-center w-fit gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold mt-1 ${
+                                currentVersion.status === 'vigente' 
+                                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/20 dark:text-emerald-400'
+                                  : currentVersion.status === 'ultraactividad'
+                                  ? 'bg-amber-50 text-amber-700 dark:bg-amber-950/20 dark:text-amber-400'
+                                  : 'bg-zinc-100 text-zinc-500'
+                              }`}>
+                                {currentVersion.status}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-zinc-450">Sin versión</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => router.push(`/admin?edit_id=${doc.id}`)}
+                              className="p-1.5 rounded-lg bg-blue-50 text-blue-600 hover:bg-blue-100 dark:bg-blue-950/30 dark:text-blue-400 transition-colors"
+                              title="Editar convenio"
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => router.push(`/admin?document_id=${doc.id}`)}
+                              className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:text-emerald-400 transition-colors"
+                              title="Añadir nueva versión"
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteDocument(doc.id)}
+                              className="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 dark:bg-red-950/30 dark:text-red-400 transition-colors"
+                              title="Eliminar convenio"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -722,8 +911,7 @@ function AdminFormContent() {
 // Envuelvo el formulario en un Suspense para cumplir con los requisitos de App Router de Next.js
 export default function AdminPanelPage() {
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-50">
-      <Navbar />
+    <div className="text-zinc-900 dark:text-zinc-50 w-full">
       <Suspense fallback={
         <div className="flex-1 flex flex-col items-center justify-center p-12">
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-red-600 border-t-transparent"></div>

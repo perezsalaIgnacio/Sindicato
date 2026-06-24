@@ -102,11 +102,10 @@ export default function ConvenioForm({ onSuccess }) {
   return (
     <form onSubmit={submitForm} className="space-y-6">
       {message.text && (
-        <div className={`px-4 py-3 rounded-xl text-sm font-medium ${
-          message.type === 'success'
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium ${message.type === 'success'
             ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
             : 'bg-red-50 text-red-800 border border-red-200'
-        }`}>
+          }`}>
           {message.text}
         </div>
       )}
