@@ -89,16 +89,16 @@ export default function DocumentoViewerPage() {
       }
 
       const { error } = await supabase
-          .from('document_versions')
-          .update({
-            version_name: versionEditForm.version_name,
-            file_path: versionEditForm.file_path,
-            published_at: versionEditForm.published_at,
-            effective_from: versionEditForm.effective_from,
-            status: versionEditForm.status,
-            is_current: versionEditForm.is_current
-          })
-          .eq('id', versionEditForm.id);
+        .from('document_versions')
+        .update({
+          version_name: versionEditForm.version_name,
+          file_path: versionEditForm.file_path,
+          published_at: versionEditForm.published_at,
+          effective_from: versionEditForm.effective_from,
+          status: versionEditForm.status,
+          is_current: versionEditForm.is_current
+        })
+        .eq('id', versionEditForm.id);
 
       if (error) throw error;
 
@@ -366,9 +366,8 @@ export default function DocumentoViewerPage() {
               <button
                 onClick={() => !isOffline && router.push(`/admin?edit_id=${document.id}`)}
                 disabled={isOffline}
-                className={`flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-bold transition-colors ${
-                  isOffline ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700'
-                }`}
+                className={`flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-lg text-xs font-bold transition-colors ${isOffline ? 'opacity-40 cursor-not-allowed' : 'hover:bg-zinc-50 dark:hover:bg-zinc-700'
+                  }`}
                 title={isOffline ? 'No disponible sin conexión' : 'Editar convenio'}
               >
                 <ShieldAlert className="h-3.5 w-3.5 text-zinc-500" />
@@ -378,9 +377,8 @@ export default function DocumentoViewerPage() {
                 <button
                   onClick={() => !isOffline && router.push(`/admin?document_id=${document.id}`)}
                   disabled={isOffline}
-                  className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg text-xs font-bold transition-colors ${
-                    isOffline ? 'bg-zinc-500 opacity-40 cursor-not-allowed' : 'bg-zinc-900 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700'
-                  }`}
+                  className={`flex items-center gap-1.5 px-3 py-2 text-white rounded-lg text-xs font-bold transition-colors ${isOffline ? 'bg-zinc-500 opacity-40 cursor-not-allowed' : 'bg-zinc-900 dark:bg-red-600 hover:bg-red-600 dark:hover:bg-red-700'
+                    }`}
                   title={isOffline ? 'No disponible sin conexión' : 'Nueva versión'}
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -438,11 +436,10 @@ export default function DocumentoViewerPage() {
                       <div
                         key={ver.id}
                         onClick={() => setSelectedVersion(ver)}
-                        className={`group cursor-pointer rounded-lg border p-3 transition-all relative ${
-                          isSelected
-                            ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/10'
-                            : 'border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700 bg-white dark:bg-zinc-800/30 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
-                        }`}
+                        className={`group cursor-pointer rounded-lg border p-3 transition-all relative ${isSelected
+                          ? 'border-red-200 dark:border-red-900/50 bg-red-50/50 dark:bg-red-950/10'
+                          : 'border-zinc-100 dark:border-zinc-800 hover:border-zinc-200 dark:hover:border-zinc-700 bg-white dark:bg-zinc-800/30 hover:bg-zinc-50 dark:hover:bg-zinc-800/50'
+                          }`}
                       >
                         {isSelected && (
                           <div className="absolute left-0 top-2 bottom-2 w-0.5 bg-red-500 rounded-r" />
@@ -502,7 +499,67 @@ export default function DocumentoViewerPage() {
                   </div>
                 )}
               </div>
+              {/* Mis Notas sobre este convenio */}
+              {currentUser && (
+                <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                    <div className="flex items-center gap-2">
+                      <StickyNote className="h-4 w-4 text-red-600" />
+                      <div>
+                        <h3 className="text-xs font-bold text-zinc-900 dark:text-white">Mis Notas</h3>
+                        <p className="text-[10px] text-zinc-400">{notes.length} sobre este convenio</p>
+                      </div>
+                    </div>
+                    <Link
+                      href={`/notas?document_id=${docId}`}
+                      className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
+                      title="Crear nota sobre este convenio"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                      Nueva
+                    </Link>
+                  </div>
 
+                  <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+                    {notesLoading ? (
+                      <div className="flex justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                      </div>
+                    ) : notes.length > 0 ? (
+                      notes.map(note => (
+                        <Link
+                          key={note.id}
+                          href={`/notas?edit_id=${note.id}`}
+                          className="block rounded-lg border border-zinc-100 dark:border-zinc-800 p-2.5 hover:border-red-200 dark:hover:border-red-900/40 bg-zinc-50/50 dark:bg-zinc-800/20 hover:bg-red-50/10 dark:hover:bg-red-950/5 transition-all group"
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors truncate">
+                              {note.title}
+                            </h4>
+                            <span className="text-[10px] text-zinc-400 dark:text-zinc-600 flex-shrink-0">
+                              {new Date(note.updated_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
+                            {htmlToPlainText(note.content) || 'Nota vacía'}
+                          </p>
+                        </Link>
+                      ))
+                    ) : (
+                      <div className="flex flex-col items-center justify-center py-4 text-center">
+                        <StickyNote className="h-5 w-5 text-zinc-200 dark:text-zinc-700 mb-1.5" />
+                        <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Sin notas sobre este convenio</p>
+                        <Link
+                          href={`/notas?document_id=${docId}`}
+                          className="mt-2 text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline"
+                        >
+                          Crear la primera nota →
+                        </Link>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
               {/* Nota legal */}
               <div className="border-t border-zinc-100 dark:border-zinc-800 px-4 py-3">
                 <div className="flex items-start gap-2">
@@ -515,67 +572,7 @@ export default function DocumentoViewerPage() {
             </div>
           </div>
 
-          {/* Mis Notas sobre este convenio */}
-          {currentUser && (
-            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
-                <div className="flex items-center gap-2">
-                  <StickyNote className="h-4 w-4 text-red-600" />
-                  <div>
-                    <h3 className="text-xs font-bold text-zinc-900 dark:text-white">Mis Notas</h3>
-                    <p className="text-[10px] text-zinc-400">{notes.length} sobre este convenio</p>
-                  </div>
-                </div>
-                <Link
-                  href={`/notas?document_id=${docId}`}
-                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
-                  title="Crear nota sobre este convenio"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Nueva
-                </Link>
-              </div>
 
-              <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
-                {notesLoading ? (
-                  <div className="flex justify-center py-4">
-                    <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
-                  </div>
-                ) : notes.length > 0 ? (
-                  notes.map(note => (
-                    <Link
-                      key={note.id}
-                      href={`/notas?edit_id=${note.id}`}
-                      className="block rounded-lg border border-zinc-100 dark:border-zinc-800 p-2.5 hover:border-red-200 dark:hover:border-red-900/40 bg-zinc-50/50 dark:bg-zinc-800/20 hover:bg-red-50/10 dark:hover:bg-red-950/5 transition-all group"
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors truncate">
-                          {note.title}
-                        </h4>
-                        <span className="text-[10px] text-zinc-400 dark:text-zinc-600 flex-shrink-0">
-                          {new Date(note.updated_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
-                        {htmlToPlainText(note.content) || 'Nota vacía'}
-                      </p>
-                    </Link>
-                  ))
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-4 text-center">
-                    <StickyNote className="h-5 w-5 text-zinc-200 dark:text-zinc-700 mb-1.5" />
-                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Sin notas sobre este convenio</p>
-                    <Link
-                      href={`/notas?document_id=${docId}`}
-                      className="mt-2 text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline"
-                    >
-                      Crear la primera nota →
-                    </Link>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
 
         </div>
       </main>

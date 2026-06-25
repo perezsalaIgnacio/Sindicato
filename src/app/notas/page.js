@@ -141,7 +141,7 @@ function NotasPageContent() {
     } else if (docId) {
       handleNewNote(docId);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams, notes.length]);
 
   // ─── Form helpers ─────────────────────────────────────────────────────
@@ -186,6 +186,7 @@ function NotasPageContent() {
         title: formTitle.trim(),
         content: formContent,
         document_id: formDocumentId || null,
+        user_id: currentUser?.id // 👈 AÑADE ESTA LÍNEA AQUÍ
       };
 
       if (isMocked) {
@@ -416,21 +417,18 @@ function NotasPageContent() {
                     <button
                       key={note.id}
                       onClick={() => openNote(note)}
-                      className={`w-full text-left rounded-xl border p-3 transition-all group ${
-                        isActive
-                          ? 'border-red-200 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/10'
-                          : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700'
-                      }`}
+                      className={`w-full text-left rounded-xl border p-3 transition-all group ${isActive
+                        ? 'border-red-200 dark:border-red-900/40 bg-red-50/60 dark:bg-red-950/10'
+                        : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-700'
+                        }`}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <p className={`text-xs font-bold leading-tight truncate flex-1 ${
-                          isActive ? 'text-red-700 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'
-                        }`}>
+                        <p className={`text-xs font-bold leading-tight truncate flex-1 ${isActive ? 'text-red-700 dark:text-red-400' : 'text-zinc-900 dark:text-zinc-100'
+                          }`}>
                           {note.title}
                         </p>
-                        <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 mt-0.5 transition-colors ${
-                          isActive ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500'
-                        }`} />
+                        <ChevronRight className={`h-3.5 w-3.5 flex-shrink-0 mt-0.5 transition-colors ${isActive ? 'text-red-400' : 'text-zinc-300 dark:text-zinc-700 group-hover:text-zinc-500'
+                          }`} />
                       </div>
 
                       {note.documents?.title && (
@@ -484,8 +482,8 @@ function NotasPageContent() {
               <div className="flex-1 flex flex-col gap-3 min-h-0">
 
                 {/* Editor top bar */}
-                <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 flex-shrink-0">
-                  <div className="flex items-center gap-2 min-w-0">
+                <div className="flex items-center justify-between bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 flex-shrink-0 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
                     <button
                       onClick={clearEditor}
                       className="p-1 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-400 transition-colors flex-shrink-0"
@@ -493,11 +491,11 @@ function NotasPageContent() {
                     >
                       <X className="h-4 w-4" />
                     </button>
-                    <span className="text-xs text-zinc-400">
+                    {/* AÑADIDO: truncate para que el título no rompa el diseño */}
+                    <span className="text-xs text-zinc-400 truncate">
                       {isCreating ? 'Nueva nota' : `Editando: ${selectedNote?.title}`}
                     </span>
                   </div>
-
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* Save status badge */}
                     {saveStatus === 'saved' && (
@@ -565,17 +563,20 @@ function NotasPageContent() {
                   value={formTitle}
                   onChange={(e) => setFormTitle(e.target.value)}
                   placeholder="Título de la nota..."
-                  className="w-full px-4 py-3 text-lg font-black text-zinc-900 dark:text-white bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all placeholder:font-normal placeholder:text-zinc-400 flex-shrink-0"
+                  // AÑADIDO: min-w-0
+                  className="w-full min-w-0 px-4 py-3 text-lg font-black text-zinc-900 dark:text-white bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl outline-none focus:border-red-500 focus:ring-2 focus:ring-red-500/10 transition-all placeholder:font-normal placeholder:text-zinc-400 flex-shrink-0"
                 />
 
                 {/* Document link selector */}
-                <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 flex-shrink-0">
+                {/* AÑADIDO: min-w-0 al div principal */}
+                <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 flex-shrink-0 min-w-0">
                   <Link2 className="h-4 w-4 text-zinc-400 flex-shrink-0" />
                   <span className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 flex-shrink-0">Convenio:</span>
                   <select
                     value={formDocumentId}
                     onChange={(e) => setFormDocumentId(e.target.value)}
-                    className="flex-1 text-xs text-zinc-700 dark:text-zinc-300 bg-transparent outline-none focus:ring-0 border-0"
+                    // AÑADIDO: min-w-0 y truncate al select
+                    className="flex-1 min-w-0 text-xs text-zinc-700 dark:text-zinc-300 bg-transparent outline-none focus:ring-0 border-0 truncate"
                   >
                     <option value="">Sin convenio asociado</option>
                     {documents.map(d => (
