@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { FileText, ShieldAlert, User, LogOut, WifiOff, Sun, Moon } from 'lucide-react';
+import { FileText, ShieldAlert, User, LogOut, WifiOff, Sun, Moon, StickyNote } from 'lucide-react';
 import { isMocked, supabase } from '@/lib/supabase';
 
 export default function Navbar() {
@@ -174,6 +174,7 @@ export default function Navbar() {
 
   const navLinks = [
     { href: '/', label: 'Dashboard' },
+    ...(currentUser ? [{ href: '/notas', label: 'Mis Notas', icon: StickyNote }] : []),
     ...(currentUser?.role === 'admin' ? [{ href: '/admin', label: 'Admin', icon: ShieldAlert }] : []),
   ];
 

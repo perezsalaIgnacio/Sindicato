@@ -222,3 +222,51 @@ CREATE POLICY "Permitir gestionar favoritos propios"
 -- Políticas sugeridas en Storage.objects:
 -- 1. "Permitir lectura pública de documentos PDF" -> SELECT en bucket 'labor-documents' para cualquiera (public).
 -- 2. "Permitir subida y gestión de PDFs a administradores" -> INSERT/UPDATE/DELETE en bucket 'labor-documents' si public.is_admin() es true.
+
+--------------------------------------------------------------------------------
+-- 7. Tabla de Notas de Usuario (vinculadas a un documento/convenio opcionalmente)
+--------------------------------------------------------------------------------
+CREATE TABLE public.notes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+    document_id UUID REFERENCES public.documents(id) ON DELETE SET NULL,
+    title TEXT NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL
+);
+
+-- Habilitar RLS en la tabla de notas
+ALTER TABLE public.notes ENABLE ROW LEVEL SECURITY;
+
+-- Políticas de RLS para notes (solo acceso privado al dueño)
+CREATE POLICY "Permitir a los usuarios ver sus propias notas"
+    ON public.notes FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Permitir a los usuarios insertar sus propias notas"
+    ON public.notes FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Permitir a los usuarios actualizar sus propias notas"
+    ON public.notes FOR UPDATE
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Permitir a los usuarios eliminar sus propias notas"
+    ON public.notes FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- Trigger para mantener actualizado updated_at en notes
+CREATE OR REPLACE FUNCTION public.handle_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+    new.updated_at = NOW();
+    RETURN new;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE TRIGGER on_note_updated
+    BEFORE UPDATE ON public.notes
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_updated_at();

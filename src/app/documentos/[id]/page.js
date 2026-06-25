@@ -2,14 +2,22 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import Navbar from '@/components/Navbar';
 import PdfViewer from '@/components/PdfViewer';
-import { supabase } from '@/lib/supabase';
+import { supabase, isMocked } from '@/lib/supabase';
 import {
   ArrowLeft, Calendar, FileText, Clock, Plus,
   Layers, Globe, ShieldAlert, Award, Loader2,
-  CheckCircle, AlertCircle, MinusCircle, Info
+  CheckCircle, AlertCircle, MinusCircle, Info,
+  StickyNote, ChevronRight
 } from 'lucide-react';
+
+// Extrae texto plano del HTML para el preview
+function htmlToPlainText(html) {
+  if (!html) return '';
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+}
 
 export default function DocumentoViewerPage() {
   const params = useParams();
@@ -21,6 +29,11 @@ export default function DocumentoViewerPage() {
   const [selectedVersion, setSelectedVersion] = useState(null);
   const [userRole, setUserRole] = useState('usuario');
   const [isOffline, setIsOffline] = useState(false);
+
+  const [currentUser, setCurrentUser] = useState(null);
+  const [authLoading, setAuthLoading] = useState(true);
+  const [notes, setNotes] = useState([]);
+  const [notesLoading, setNotesLoading] = useState(true);
 
   const [showEditVersionModal, setShowEditVersionModal] = useState(false);
 
@@ -97,10 +110,33 @@ export default function DocumentoViewerPage() {
   };
 
   useEffect(() => {
-    const simulatedUser = localStorage.getItem('simulated_user');
-    if (simulatedUser) {
-      setUserRole(JSON.parse(simulatedUser).role);
+    async function checkAuthAndLoad() {
+      const simulatedUser = localStorage.getItem('simulated_user');
+      if (simulatedUser) {
+        const parsed = JSON.parse(simulatedUser);
+        setUserRole(parsed.role);
+        setCurrentUser(parsed);
+        setAuthLoading(false);
+      } else {
+        try {
+          const { data: { session } } = await supabase.auth.getSession();
+          if (session?.user) {
+            setCurrentUser({ id: session.user.id, email: session.user.email });
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', session.user.id)
+              .single();
+            if (profile) setUserRole(profile.role);
+          }
+        } catch (e) {
+          // offline
+        } finally {
+          setAuthLoading(false);
+        }
+      }
     }
+    checkAuthAndLoad();
 
     async function loadDocument() {
       const cacheKey = `cached_document_${docId}`;
@@ -166,6 +202,37 @@ export default function DocumentoViewerPage() {
 
     if (docId) loadDocument();
   }, [docId]);
+
+  // Load notes for this document
+  useEffect(() => {
+    async function loadNotes() {
+      if (authLoading || !currentUser || !docId) {
+        setNotesLoading(false);
+        return;
+      }
+      setNotesLoading(true);
+      try {
+        if (isMocked) {
+          const mockNotes = JSON.parse(localStorage.getItem('mock_notes') || '[]');
+          const filtered = mockNotes.filter(n => n.document_id === docId);
+          setNotes(filtered);
+        } else {
+          const { data, error } = await supabase
+            .from('notes')
+            .select('id, title, content, updated_at')
+            .eq('document_id', docId)
+            .order('updated_at', { ascending: false });
+          if (error) throw error;
+          setNotes(data || []);
+        }
+      } catch (e) {
+        console.error('Error al cargar notas:', e);
+      } finally {
+        setNotesLoading(false);
+      }
+    }
+    loadNotes();
+  }, [authLoading, currentUser, docId]);
 
   const formatDate = (dateString) => {
     if (!dateString) return '—';
@@ -447,6 +514,68 @@ export default function DocumentoViewerPage() {
               </div>
             </div>
           </div>
+
+          {/* Mis Notas sobre este convenio */}
+          {currentUser && (
+            <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 flex flex-col overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-zinc-800">
+                <div className="flex items-center gap-2">
+                  <StickyNote className="h-4 w-4 text-red-600" />
+                  <div>
+                    <h3 className="text-xs font-bold text-zinc-900 dark:text-white">Mis Notas</h3>
+                    <p className="text-[10px] text-zinc-400">{notes.length} sobre este convenio</p>
+                  </div>
+                </div>
+                <Link
+                  href={`/notas?document_id=${docId}`}
+                  className="flex items-center gap-1 px-2 py-1 text-[11px] font-bold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/20 rounded-lg transition-colors"
+                  title="Crear nota sobre este convenio"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Nueva
+                </Link>
+              </div>
+
+              <div className="p-3 space-y-2 max-h-[300px] overflow-y-auto">
+                {notesLoading ? (
+                  <div className="flex justify-center py-4">
+                    <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                  </div>
+                ) : notes.length > 0 ? (
+                  notes.map(note => (
+                    <Link
+                      key={note.id}
+                      href={`/notas?edit_id=${note.id}`}
+                      className="block rounded-lg border border-zinc-100 dark:border-zinc-800 p-2.5 hover:border-red-200 dark:hover:border-red-900/40 bg-zinc-50/50 dark:bg-zinc-800/20 hover:bg-red-50/10 dark:hover:bg-red-950/5 transition-all group"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 group-hover:text-red-600 dark:group-hover:text-red-400 transition-colors truncate">
+                          {note.title}
+                        </h4>
+                        <span className="text-[10px] text-zinc-400 dark:text-zinc-600 flex-shrink-0">
+                          {new Date(note.updated_at).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' })}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-zinc-500 dark:text-zinc-400 mt-1 line-clamp-2 leading-relaxed">
+                        {htmlToPlainText(note.content) || 'Nota vacía'}
+                      </p>
+                    </Link>
+                  ))
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 text-center">
+                    <StickyNote className="h-5 w-5 text-zinc-200 dark:text-zinc-700 mb-1.5" />
+                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500">Sin notas sobre este convenio</p>
+                    <Link
+                      href={`/notas?document_id=${docId}`}
+                      className="mt-2 text-[11px] font-bold text-red-600 dark:text-red-400 hover:underline"
+                    >
+                      Crear la primera nota →
+                    </Link>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
         </div>
       </main>
